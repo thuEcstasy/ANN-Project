@@ -196,7 +196,6 @@ class TextDataset(Dataset):
         self.length = len(self.text_datasets['train'])
         self.data_args = data_args
         self.model_emb = model_emb
-
     def __len__(self):
         return self.length
 

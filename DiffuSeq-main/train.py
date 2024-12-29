@@ -49,7 +49,6 @@ def main():
         model_emb=model_weight # use model's weights as init
     )
     next(data)
-
     data_valid = load_data_text(
         batch_size=args.batch_size,
         seq_len=args.seq_len,
@@ -72,6 +71,21 @@ def main():
     # model.cuda() #  DEBUG **
 
     pytorch_total_params = sum(p.numel() for p in model.parameters())
+
+    total_params = 0
+    detailed_params = {}
+
+    # for name, param in model.named_parameters():
+    #     if param.requires_grad:
+    #         num_params = param.numel()
+    #         total_params += num_params
+    #         # 记录每个部分的参数量
+    #         detailed_params[name] = num_params
+
+    # logger.log("### Detailed Parameter Count:")
+    # for key, value in detailed_params.items():
+    #     print(f"{key}: {value}")
+    # logger.log(f"### Total Trainable Parameters: {total_params}")
 
     logger.log(f'### The parameter count is {pytorch_total_params}')
     schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)

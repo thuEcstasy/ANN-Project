@@ -42,6 +42,7 @@ class TransformerNetModel(nn.Module):
         super().__init__()
 
         if config is None:
+            config_name = "/home/aiuser/ANN/DiffuSeq-main/models/bert-base-uncased"
             config = AutoConfig.from_pretrained(config_name)
             config.hidden_dropout_prob = dropout
 
@@ -132,6 +133,7 @@ class TransformerNetModel(nn.Module):
         :param timesteps: a 1-D batch of timesteps.
         :return: an [N x C x ...] Tensor of outputs.
         """
+        # X 的形状不对！怎么算 X 的形状的
         emb_t = self.time_embed(timestep_embedding(timesteps, self.hidden_t_dim))
 
         if self.input_dims != self.hidden_size:

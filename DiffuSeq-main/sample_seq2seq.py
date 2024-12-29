@@ -68,6 +68,7 @@ def main():
     pytorch_total_params = sum(p.numel() for p in model.parameters())
     logger.log(f'### The parameter count is {pytorch_total_params}')
 
+
     model.eval().requires_grad_(False).to(dist_util.dev())
 
     tokenizer = load_tokenizer(args)

@@ -8,7 +8,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='decoding args.')
     parser.add_argument('--model_dir', type=str, default='', help='path to the folder of diffusion model')
     parser.add_argument('--seed', type=int, default=101, help='random seed')
-    parser.add_argument('--step', type=int, default=2000, help='if less than diffusion training steps, like 1000, use ddim sampling')
+    parser.add_argument('--step', type=int, default=400, help='if less than diffusion training steps, like 1000, use ddim sampling')
 
     parser.add_argument('--bsz', type=int, default=50, help='batch size')
     parser.add_argument('--split', type=str, default='test', choices=['train', 'valid', 'test'], help='dataset split used to decode')
@@ -29,7 +29,7 @@ if __name__ == '__main__':
         print(lst)
         checkpoints = sorted(glob.glob(f"{lst}/{args.pattern}*.pt"))[::-1]
 
-        out_dir = 'generation_outputs'
+        out_dir = 'generation_outputs_ddim'
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
 

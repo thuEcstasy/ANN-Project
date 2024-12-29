@@ -125,7 +125,7 @@ if __name__ == '__main__':
                 sourceDict[cnt].append(source)
                 cnt += 1
                 
-        P, R, F1 = score(recovers, references, model_type='microsoft/deberta-xlarge-mnli', lang='en', verbose=True)
+        P, R, F1 = score(recovers, references, model_type='/home/aiuser/ANN/DiffuSeq-main/models/deberta-xlarge-mnli', lang='en', verbose=True)
 
         print('*'*30)
         print('avg BLEU score', np.mean(bleu))
@@ -178,7 +178,7 @@ if __name__ == '__main__':
 
             # print(len(recovers), len(references), len(recovers))
             
-            P, R, F1 = score(recovers, references, model_type='microsoft/deberta-xlarge-mnli', lang='en', verbose=True)
+            P, R, F1 = score(recovers, references, model_type='/home/aiuser/ANN/DiffuSeq-main/models/deberta-xlarge-mnli', lang='en', verbose=True)
 
             print('*'*30)
             print('avg BLEU score', np.mean(bleu))

@@ -242,6 +242,7 @@ class GaussianDiffusion:
         :param mask: anchoring masked position
         :return: A noisy version of x_start.
         """
+        
         if noise is None:
             noise = th.randn_like(x_start)
 
