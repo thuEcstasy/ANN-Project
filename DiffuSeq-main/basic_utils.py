@@ -17,6 +17,8 @@ class myTokenizer():
     ################################################
     def __init__(self, args):
         if args.vocab == 'bert':
+            print(args.config_name)
+            args.config_name = "/home/aiuser/ANN/DiffuSeq-main/models/bert-base-uncased"
             tokenizer = AutoTokenizer.from_pretrained(args.config_name)
             self.tokenizer = tokenizer
             self.sep_token_id = tokenizer.sep_token_id

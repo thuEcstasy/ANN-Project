@@ -5,18 +5,18 @@ https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0
 Docstrings have been added, as well as DDIM sampling and a new collection of beta schedules.
 """
 
-import enum
-import math
 
-import numpy as np
-import torch as th
+
+
+from numpy import pi
+import jittor as jt
 import sys
 sys.path.append('.')
 
-import torch.nn.functional as F
+
 
 from .utils.nn import mean_flat
-from .utils.losses import normal_kl, discretized_gaussian_log_likelihood
+
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     """
@@ -33,48 +33,48 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         scale = 1000 / num_diffusion_timesteps
         beta_start = scale * 0.0001
         beta_end = scale * 0.02
-        return np.linspace(
-            beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
-        )
-    elif schedule_name == "cosine":
+        return jt.linspace(
+            beta_start, beta_end, num_diffusion_timesteps
+        ).cast(jt.float64)
+    elif schedule_name == 'cosine':
         return betas_for_alpha_bar(
             num_diffusion_timesteps,
-            lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2,
+            lambda t: jt.cos((t + 0.008) / 1.008 * pi / 2) ** 2
         )
     elif schedule_name == 'sqrt':
         return betas_for_alpha_bar(
             num_diffusion_timesteps,
-            lambda t: 1-np.sqrt(t + 0.0001),
+            lambda t: 1-jt.sqrt(t + 0.0001)
         )
-    elif schedule_name == "trunc_cos":
+    elif schedule_name == 'trunc_cos':
         return betas_for_alpha_bar_left(
             num_diffusion_timesteps,
-            lambda t: np.cos((t + 0.1) / 1.1 * np.pi / 2) ** 2,
+            lambda t: jt.cos((t + 0.1) / 1.1 * pi / 2) ** 2
         )
     elif schedule_name == 'trunc_lin':
         scale = 1000 / num_diffusion_timesteps
         beta_start = scale * 0.0001 + 0.01
         beta_end = scale * 0.02 + 0.01
-        return np.linspace(
-            beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
-        )
+        return jt.linspace(
+            beta_start, beta_end, num_diffusion_timesteps
+        ).cast(jt.float64)
     elif schedule_name == 'pw_lin':
         scale = 1000 / num_diffusion_timesteps
         beta_start = scale * 0.0001 + 0.01
         beta_mid = scale * 0.0001  #scale * 0.02
         beta_end = scale * 0.02
-        first_part = np.linspace(
-            beta_start, beta_mid, 10, dtype=np.float64
-        )
-        second_part = np.linspace(
-            beta_mid, beta_end, num_diffusion_timesteps - 10 , dtype=np.float64
-        )
-        return np.concatenate(
+        first_part = jt.linspace(
+            beta_start, beta_mid, 10
+        ).cast(jt.float64)
+        second_part = jt.linspace(
+            beta_mid, beta_end, num_diffusion_timesteps - 10
+        ).cast(jt.float64)
+        return jt.concat(
             [first_part, second_part]
         )
     else:
         raise NotImplementedError(f"unknown beta schedule: {schedule_name}")
-
+    
 def betas_for_alpha_bar_left(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, but shifts towards left interval starting from 0
@@ -93,8 +93,8 @@ def betas_for_alpha_bar_left(num_diffusion_timesteps, alpha_bar, max_beta=0.999)
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
         betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
-    return np.array(betas)
-
+    return jt.array(betas)
+    
 def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
     """
     Create a beta schedule that discretizes the given alpha_t_bar function,
@@ -112,7 +112,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
         betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
-    return np.array(betas)
+    return jt.array(betas)
 
 class GaussianDiffusion:
     """
@@ -130,7 +130,7 @@ class GaussianDiffusion:
                               model so that they are always scaled like in the
                               original paper (0 to 1000).
     """
-
+    
     def __init__(
         self,
         *,
@@ -148,27 +148,27 @@ class GaussianDiffusion:
         self.learn_sigmas = learn_sigmas
         self.sigma_small = sigma_small
         self.use_kl = use_kl
-
-        # Use float64 for accuracy.
-        betas = np.array(betas, dtype=np.float64)
+        
+        
+        betas = jt.array(betas).cast(jt.float64)
         self.betas = betas
         assert len(betas.shape) == 1, "betas must be 1-D"
-        assert (betas > 0).all() and (betas <= 1).all()
-
+        assert jt.all_(betas > 0) and jt.all_(betas <= 1)
+        
         self.num_timesteps = int(betas.shape[0])
-
+        
         alphas = 1.0 - betas
-        self.alphas_cumprod = np.cumprod(alphas, axis=0)
-        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1])
-        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0)
+        self.alphas_cumprod = jt.cumprod(alphas, dim=0)
+        self.alphas_cumprod_prev = jt.concat([jt.array(1.0), self.alphas_cumprod[:-1]])
+        self.alphas_cumprod_next = jt.concat([self.alphas_cumprod[1:], jt.array(0.0)])
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.sqrt_alphas_cumprod = np.sqrt(self.alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = np.sqrt(1.0 - self.alphas_cumprod)
-        self.log_one_minus_alphas_cumprod = np.log(1.0 - self.alphas_cumprod)
-        self.sqrt_recip_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod)
-        self.sqrt_recipm1_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod - 1)
+        self.sqrt_alphas_cumprod = jt.sqrt(self.alphas_cumprod)
+        self.sqrt_one_minus_alphas_cumprod = jt.sqrt(1.0 - self.alphas_cumprod)
+        self.log_one_minus_alphas_cumprod = jt.log(1.0 - self.alphas_cumprod)
+        self.sqrt_recip_alphas_cumprod = jt.sqrt(1.0 / self.alphas_cumprod)
+        self.sqrt_recipm1_alphas_cumprod = jt.sqrt(1.0 / self.alphas_cumprod - 1)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         self.posterior_variance = (
@@ -176,25 +176,25 @@ class GaussianDiffusion:
         )
         # log calculation clipped because the posterior variance is 0 at the
         # beginning of the diffusion chain.
-        self.posterior_log_variance_clipped = np.log(
-            np.append(self.posterior_variance[1], self.posterior_variance[1:])
+        self.posterior_log_variance_clipped = jt.log(
+            jt.concat([self.posterior_variance[1], self.posterior_variance[1:]])
         )
         self.posterior_mean_coef1 = (
-            betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
+            betas * jt.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         )
         self.posterior_mean_coef2 = (
             (1.0 - self.alphas_cumprod_prev)
-            * np.sqrt(alphas)
+            * jt.sqrt(alphas)
             / (1.0 - self.alphas_cumprod)
         )
-
+        
         self.mapping_func = None # implement in train main()
         self.add_mask_noise = False # TODO
-
+    
     def training_losses(self, model, *args, **kwargs):
         self.model = model
         return self.training_losses_seq2seq(model, *args, **kwargs)
-
+    
     def _predict_xstart_from_eps(self, x_t, t, eps):
         assert x_t.shape == eps.shape
         return (
@@ -210,7 +210,7 @@ class GaussianDiffusion:
 
     def _scale_timesteps(self, t):
         if self.rescale_timesteps:
-            return t.float() * (1000.0 / self.num_timesteps)
+            return jt.float(t) * (1000.0 / self.num_timesteps)
         return t
 
     def q_mean_variance(self, x_start, t):
@@ -242,9 +242,8 @@ class GaussianDiffusion:
         :param mask: anchoring masked position
         :return: A noisy version of x_start.
         """
-        
         if noise is None:
-            noise = th.randn_like(x_start)
+            noise = jt.randn_like(x_start)
 
         assert noise.shape == x_start.shape
         x_t = (
@@ -256,8 +255,8 @@ class GaussianDiffusion:
         if mask == None:
             return x_t
         else:
-            mask = th.broadcast_to(mask.unsqueeze(dim=-1), x_start.shape)
-            return th.where(mask==0, x_start, x_t)
+            mask = jt.broadcast(mask.unsqueeze(dim=-1), x_start.shape)
+            return jt.where(mask==0, x_start, x_t)
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
         """
@@ -315,8 +314,8 @@ class GaussianDiffusion:
         
         # for fixedlarge, we set the initial (log-)variance like so
         # to get a better decoder log likelihood.
-        model_variance = np.append(self.posterior_variance[1], self.betas[1:])
-        model_log_variance = np.log(np.append(self.posterior_variance[1], self.betas[1:]))
+        model_variance = jt.concat([self.posterior_variance[1], self.betas[1:]])
+        model_log_variance = jt.log(jt.concat([self.posterior_variance[1], self.betas[1:]]))
         
         model_variance = _extract_into_tensor(model_variance, t, x.shape)
         model_log_variance = _extract_into_tensor(model_log_variance, t, x.shape)
@@ -381,24 +380,24 @@ class GaussianDiffusion:
         )
         if top_p is not None and top_p > 0:
             # print('top_p sampling')
-            noise = th.randn_like(x)
-            replace_mask = th.abs(noise) > top_p
+            noise = jt.randn_like(x)
+            replace_mask = jt.abs(noise) > top_p
             while replace_mask.any():
-                noise[replace_mask] = th.randn_like(noise[replace_mask])
-                replace_mask = th.abs(noise) > top_p
-            assert (th.abs(noise) <= top_p).all()
+                noise[replace_mask] = jt.randn_like(noise[replace_mask])
+                replace_mask = jt.abs(noise) > top_p
+            assert (jt.abs(noise) <= top_p).all()
 
         else:
-            noise = th.randn_like(x)
+            noise = jt.randn_like(x)
 
         nonzero_mask = (
-            (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
+            jt.float(t != 0).view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
-        sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
+        sample = out["mean"] + nonzero_mask * jt.exp(0.5 * out["log_variance"]) * noise
         if mask == None:
             pass
         else:
-            sample = th.where(mask==0, x_start, sample)
+            sample = jt.where(mask==0, x_start, sample)
 
         return {
             "sample": sample, 
@@ -453,7 +452,7 @@ class GaussianDiffusion:
             clip_denoised=clip_denoised,
             denoised_fn=denoised_fn,
             model_kwargs=model_kwargs,
-            device=device,
+            
             progress=progress,
             top_p=top_p,
             clamp_step=clamp_step,
@@ -488,13 +487,13 @@ class GaussianDiffusion:
         Returns a generator over dicts, where each dict is the return value of
         p_sample().
         """
-        if device is None:
-            device = next(model.parameters()).device
+
+
         assert isinstance(shape, (tuple, list))
         if noise is not None: # custom your the start point of x_0
             sample_x = noise
         else:
-            sample_x = th.randn(*shape, device=device)
+            sample_x = jt.randn(*shape)
         indices = list(range(self.num_timesteps))[::-1]
 
         if progress:
@@ -503,7 +502,7 @@ class GaussianDiffusion:
             indices = tqdm(indices)
 
         for i in indices: # from T to 0
-            t = th.tensor([i] * shape[0], device=device)
+            t = jt.Var([i] * shape[0])
             if not clamp_first:
                 if i > clamp_step:
                     denoised_fn_cur = None
@@ -514,7 +513,7 @@ class GaussianDiffusion:
                     denoised_fn_cur = denoised_fn
                 else:
                     denoised_fn_cur = None
-            with th.no_grad():
+            with jt.no_grad():
                 out = self.p_sample(
                     model,
                     sample_x,
@@ -536,7 +535,7 @@ class GaussianDiffusion:
         :param x_start_mean: word embedding
         :return: x_0
         '''
-        noise = th.randn_like(x_start_mean)
+        noise = jt.randn_like(x_start_mean)
         assert noise.shape == x_start_mean.shape
         # print(x_start_mean.device, noise.device)
         return (
@@ -552,7 +551,7 @@ class GaussianDiffusion:
         reshaped_x_t = x_t
         logits = get_logits(reshaped_x_t)  # bsz, seqlen, vocab
         # print(logits.shape)
-        loss_fct = th.nn.CrossEntropyLoss(reduction='none')
+        loss_fct = jt.nn.CrossEntropyLoss()
         decoder_nll = loss_fct(logits.view(-1, logits.size(-1)), input_ids.view(-1)).view(input_ids.shape)
         if mask != None:
             decoder_nll *= mask
@@ -561,7 +560,7 @@ class GaussianDiffusion:
             decoder_nll = decoder_nll.sum(dim=-1)/mask.sum(dim=-1)
         else:
             decoder_nll = decoder_nll.mean(dim=-1)
-
+        
         return decoder_nll
 
     def _x0_helper(self, model_output, x, t):
@@ -596,24 +595,24 @@ class GaussianDiffusion:
         """
         x_start_fix = x_start # save the orignal x_0
         assert 'input_ids' in model_kwargs
-        input_ids_x = model_kwargs.pop('input_ids').to(t.device)
-        input_ids_mask = model_kwargs.pop('input_mask').to(t.device)
+        input_ids_x = model_kwargs.pop('input_ids')
+        input_ids_mask = model_kwargs.pop('input_mask')
         x_start_mean = model.model.module.get_embeds(input_ids_x)
         
         std = _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod,
-                                   th.tensor([0]).to(x_start_mean.device),
+                                   jt.Var([0]),
                                    x_start_mean.shape)
         # print(std.shape, )
         # x_start_log_var = 2 * th.log(std)
         x_start = self._get_x_start(x_start_mean, std)
         # print(x_start_mean.shape, x_start.shape)
         if noise is None:
-            noise = th.randn_like(x_start)
+            noise = jt.randn_like(x_start)
 
         x_t = self.q_sample(x_start, t, noise=noise, mask=input_ids_mask) # reparametrization trick.
 
-        get_logits = model.model.module.get_logits
-
+        get_logits = model.model.module.get_logits ### ??? 
+        
         terms = {}
 
         target = x_start
@@ -624,10 +623,10 @@ class GaussianDiffusion:
         model_out_x_start = self._x0_helper(model_output, x_t, t)['pred_xstart'] # predicted_xstart = model_output
         t0_mask = (t == 0)
         t0_loss = mean_flat((x_start_mean - model_out_x_start) ** 2)
-        terms["mse"] = th.where(t0_mask, t0_loss, terms["mse"])
+        terms["mse"] = jt.where(t0_mask, t0_loss, terms["mse"])
 
         # tT_mask = (t == self.num_timesteps - 1)
-        out_mean, _, _ = self.q_mean_variance(x_start, th.LongTensor([self.num_timesteps - 1]).to(x_start.device))
+        out_mean, _, _ = self.q_mean_variance(x_start, jt.int64([self.num_timesteps - 1]))
         tT_loss =  mean_flat(out_mean ** 2)
 
         decoder_nll = self._token_discrete_loss(x_start, get_logits, input_ids_x) # embedding regularization
@@ -671,17 +670,17 @@ class GaussianDiffusion:
         alpha_bar_prev = _extract_into_tensor(self.alphas_cumprod_prev, t, x.shape)
         sigma = (
             eta
-            * th.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar))
-            * th.sqrt(1 - alpha_bar / alpha_bar_prev)
+            * jt.sqrt((1 - alpha_bar_prev) / (1 - alpha_bar))
+            * jt.sqrt(1 - alpha_bar / alpha_bar_prev)
         )
         # Equation 12.
-        noise = th.randn_like(x)
+        noise = jt.randn_like(x)
         mean_pred = (
-            out["pred_xstart"] * th.sqrt(alpha_bar_prev)
-            + th.sqrt(1 - alpha_bar_prev - sigma ** 2) * eps
+            out["pred_xstart"] * jt.sqrt(alpha_bar_prev)
+            + jt.sqrt(1 - alpha_bar_prev - sigma ** 2) * eps
         )
         nonzero_mask = (
-            (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
+            jt.float(t != 0).view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
         # print(sigma.mean())
         sample = mean_pred + nonzero_mask * sigma * noise
@@ -692,7 +691,7 @@ class GaussianDiffusion:
         if mask == None:
             pass
         else:
-            sample = th.where(mask==0, x_start, sample)
+            sample = jt.where(mask==0, x_start, sample)
         
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 
@@ -728,8 +727,8 @@ class GaussianDiffusion:
 
         # Equation 12. reversed
         mean_pred = (
-            out["pred_xstart"] * th.sqrt(alpha_bar_next)
-            + th.sqrt(1 - alpha_bar_next) * eps
+            out["pred_xstart"] * jt.sqrt(alpha_bar_next)
+            + jt.sqrt(1 - alpha_bar_next) * eps
         )
 
         return {"sample": mean_pred, "pred_xstart": out["pred_xstart"]}
@@ -769,7 +768,7 @@ class GaussianDiffusion:
             progress=progress,
             mask=mask,
             x_start=x_start,
-            gap = gap
+            gap=gap
         ):
             final.append(sample['sample'])
         return final
@@ -796,13 +795,13 @@ class GaussianDiffusion:
 
         Same usage as p_sample_loop_progressive().
         """
-        if device is None:
-            device = next(model.parameters()).device
+
+
         assert isinstance(shape, (tuple, list))
         if noise is not None:
             sample_x = noise
         else:
-            sample_x = th.randn(*shape, device=device)
+            sample_x = jt.randn(*shape)
         indices = list(range(self.num_timesteps))[::-1][::gap]
 
         if progress:
@@ -812,8 +811,8 @@ class GaussianDiffusion:
             indices = tqdm(indices)
 
         for i in indices:
-            t = th.tensor([i] * shape[0], device=device)
-            with th.no_grad():
+            t = jt.Var([i] * shape[0])
+            with jt.no_grad():
                 out = self.ddim_sample(
                     model,
                     sample_x,
@@ -837,7 +836,7 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
                             dimension equal to the length of timesteps.
     :return: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
     """
-    res = th.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
+    res = jt.float(jt.Var(arr)[timesteps])
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res.expand(broadcast_shape)
@@ -922,7 +921,7 @@ class SpacedDiffusion(GaussianDiffusion):
                 new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
                 last_alpha_cumprod = alpha_cumprod
                 self.timestep_map.append(i)
-        kwargs["betas"] = np.array(new_betas)
+        kwargs["betas"] = jt.array(new_betas)
         super().__init__(**kwargs)
 
     def p_mean_variance(
@@ -956,15 +955,15 @@ class _WrappedModel:
         self.rescale_timesteps = rescale_timesteps
         self.original_num_steps = original_num_steps
 
-    def __call__(self, x, ts, **kwargs):
-        # print(ts)
-        map_tensor = th.tensor(self.timestep_map, device=ts.device, dtype=ts.dtype)
+    def __call__(self, x, ts: jt.Var, **kwargs):
+        
+        map_tensor = jt.Var(self.timestep_map).cast(ts.dtype)
         new_ts = map_tensor[ts]
-        # print(new_ts)
+        
         if self.rescale_timesteps:
-            new_ts = new_ts.float() * (1000.0 / self.original_num_steps)
-        # temp = self.model(x, new_ts, **kwargs)
-        # print(temp.shape)
-        # return temp
-        # print(new_ts)
+            new_ts = jt.float(new_ts) * (1000.0 / self.original_num_steps)
+        
+        
+        
+        
         return self.model(x, new_ts, **kwargs)
