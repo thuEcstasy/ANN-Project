@@ -1,0 +1,15 @@
+python run_train.py \
+--diff_steps 2000 \
+--lr 0.0001 \
+--learning_steps 2000 \
+--save_interval 1000 \
+--seed 102 \
+--noise_schedule sqrt \
+--hidden_dim 1024 \
+--bsz 256 \
+--dataset qqp \
+--data_dir /datasets/QQP \
+--vocab bert \
+--seq_len 32 \
+--schedule_sampler lossaware \
+--notes qqp
